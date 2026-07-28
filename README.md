@@ -5,7 +5,9 @@
 </p>
 
 <p align="center">
-  <img src="public/banner.png" alt="waoowaoo" width="600">
+  <a href="https://trendshift.io/repositories/22585?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-22585" target="_blank" rel="noopener noreferrer">
+    <img src="https://trendshift.io/api/badge/trendshift/repositories/22585/daily" alt="waooAI%2Fwaoowaoo | Trendshift" width="250" height="55"/>
+  </a>
 </p>
 
 <h1 align="center">waoowaoo AI 影视 Studio</h1>
