@@ -188,6 +188,7 @@ export const PRESET_MODELS: PresetModel[] = [
     // Agnes AI 模型
     { modelId: 'agnes-2.5-flash', name: 'Agnes 2.5 Flash', type: 'llm', provider: 'agnes' },
     { modelId: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash', type: 'image', provider: 'agnes' },
+    { modelId: 'agnes-image-2.0-flash', name: 'Agnes Image 2.0 Flash', type: 'image', provider: 'agnes' },
     { modelId: 'agnes-video-v2.0', name: 'Agnes Video V2.0', type: 'video', provider: 'agnes' },
 ]
 
