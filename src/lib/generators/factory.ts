@@ -63,6 +63,8 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
             return new GeminiCompatibleImageGenerator(actualModelId, provider)
         case 'openai-compatible':
             return new OpenAICompatibleImageGenerator(actualModelId, provider)
+        case 'agnes':
+            return new OpenAICompatibleImageGenerator(actualModelId, provider)
         case 'bailian':
             return new BailianImageGenerator()
         case 'siliconflow':
@@ -91,6 +93,8 @@ export function createVideoGenerator(provider: string): VideoGenerator {
         case 'vidu':
             return new ViduVideoGenerator()
         case 'openai-compatible':
+            return new OpenAICompatibleVideoGenerator(provider)
+        case 'agnes':
             return new OpenAICompatibleVideoGenerator(provider)
         case 'bailian':
             return new BailianVideoGenerator()
