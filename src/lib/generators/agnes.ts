@@ -22,7 +22,8 @@ import { getProviderConfig } from '@/lib/api-config'
 // 常量
 // ============================================================
 
-const AGNES_BASE_URL = 'https://apihub.agnes-ai.com/v1'
+const AGNES_BASE_URL_GLOBAL = 'https://apihub.agnes-ai.com/v1'
+const AGNES_BASE_URL_CN = 'https://apihub.agnes-ai.cn/v1'
 const IMAGE_ENDPOINT = '/images/generations'
 const VIDEO_ENDPOINT = '/videos'
 const VIDEO_STATUS_ENDPOINT = '/agnesapi'
@@ -39,8 +40,13 @@ const VIDEO_POLL_INTERVAL_MS = 5_000  // 5 秒
 
 function getBaseUrl(userId: string, providerId?: string): Promise<string> {
   return getProviderConfig(userId, providerId || 'agnes').then(config => {
-    return config?.baseUrl || AGNES_BASE_URL
-  }).catch(() => AGNES_BASE_URL)
+    // 优先使用用户配置的 baseUrl
+    if (config?.baseUrl) {
+      return config.baseUrl
+    }
+    // 默认使用国际站
+    return AGNES_BASE_URL_GLOBAL
+  }).catch(() => AGNES_BASE_URL_GLOBAL)
 }
 
 function getApiKey(userId: string, providerId?: string): Promise<string> {

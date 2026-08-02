@@ -178,7 +178,7 @@
       "gemini_compatible_step1": "Enter any Gemini-compatible service Base URL and API key",
       "bailian_step1": "Go to Alibaba Cloud Bailian console and get an API Key",
       "siliconflow_step1": "Go to SiliconFlow console and create an API Key",
-      "agnes_step1": "Go to Agnes AI platform and create an API Key"
+      "agnes_step1": "Go to Agnes AI platform and create an API Key (Global: apihub.agnes-ai.com, China: apihub.agnes-ai.cn)"
     }
   },
   "assistantOpen": "AI Assistant",

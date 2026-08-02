@@ -178,7 +178,7 @@
       "gemini_compatible_step1": "填写任意 Gemini 协议兼容服务的 Base URL 与 API Key",
       "bailian_step1": "进入阿里云百炼平台，获取 API Key",
       "siliconflow_step1": "进入硅基流动控制台，创建 API Key",
-      "agnes_step1": "进入 Agnes AI 平台，创建 API Key"
+      "agnes_step1": "进入 Agnes AI 平台，创建 API Key（国际站：apihub.agnes-ai.com，中国站：apihub.agnes-ai.cn）"
     }
   },
   "assistantOpen": "AI配置助手",
