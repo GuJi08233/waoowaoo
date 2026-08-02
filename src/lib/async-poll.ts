@@ -29,6 +29,7 @@ export interface PollResult {
     status: 'pending' | 'completed' | 'failed'
     resultUrl?: string
     imageUrl?: string
+    imageBase64?: string    // 新增：base64 图片数据
     videoUrl?: string
     actualVideoTokens?: number
     downloadHeaders?: Record<string, string>
@@ -376,6 +377,20 @@ async function pollOCompatTask(
                     : { imageUrl: outputUrl.trim() }),
             }
         }
+
+        // 新增：尝试从 outputBase64Path 提取 base64 数据
+        const outputBase64 = readJsonPath(payload, template.response.outputBase64Path)
+        if (typeof outputBase64 === 'string' && outputBase64.trim()) {
+            const base64Data = outputBase64.trim()
+            const dataUri = base64Data.startsWith('data:')
+                ? base64Data
+                : `data:image/png;base64,${base64Data}`
+            return {
+                status: 'completed',
+                imageBase64: dataUri,
+            }
+        }
+
         if (template.content) {
             const contentRequest = await buildRenderedTemplateRequest({
                 baseUrl: config.baseUrl,

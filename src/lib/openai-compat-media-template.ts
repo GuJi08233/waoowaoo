@@ -29,6 +29,7 @@ export interface TemplateResponseMap {
   statusPath?: string
   outputUrlPath?: string
   outputUrlsPath?: string
+  outputBase64Path?: string    // 新增：base64 数据路径
   errorPath?: string
 }
 

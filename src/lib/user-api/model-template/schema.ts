@@ -216,6 +216,7 @@ function readResponseMap(
     'statusPath',
     'outputUrlPath',
     'outputUrlsPath',
+    'outputBase64Path',
     'errorPath',
   ]
 

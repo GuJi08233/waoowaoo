@@ -99,6 +99,7 @@ export async function generateImageViaOpenAICompatTemplate(
   }
 
   if (request.template.mode === 'sync') {
+    // 第1轮：尝试从 outputUrlsPath 提取 URL 数组
     const outputUrls = readTemplateOutputUrls(
       readJsonPath(payload, request.template.response.outputUrlsPath),
     )
@@ -111,6 +112,7 @@ export async function generateImageViaOpenAICompatTemplate(
       }
     }
 
+    // 第2轮：尝试从 outputUrlPath 提取单个 URL
     const outputUrl = readJsonPath(payload, request.template.response.outputUrlPath)
     if (typeof outputUrl === 'string' && outputUrl.trim().length > 0) {
       return {
@@ -118,6 +120,21 @@ export async function generateImageViaOpenAICompatTemplate(
         imageUrl: outputUrl.trim(),
       }
     }
+
+    // 第3轮：尝试从 outputBase64Path 提取 base64 数据
+    const outputBase64 = readJsonPath(payload, request.template.response.outputBase64Path)
+    if (typeof outputBase64 === 'string' && outputBase64.trim().length > 0) {
+      // 自动添加 data URI 前缀（如果没有）
+      const base64Data = outputBase64.trim()
+      const dataUri = base64Data.startsWith('data:')
+        ? base64Data
+        : `data:image/png;base64,${base64Data}`
+      return {
+        success: true,
+        imageBase64: dataUri,
+      }
+    }
+
     throw new Error('OPENAI_COMPAT_IMAGE_TEMPLATE_OUTPUT_NOT_FOUND')
   }
 
