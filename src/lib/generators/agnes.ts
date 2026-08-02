@@ -235,7 +235,7 @@ export class AgnesVideoGenerator implements VideoGenerator {
     _ulogInfo(`[AgnesVideo] Task created: ${taskId}`)
 
     // 2. 轮询等待结果
-    return this.pollForResult(baseUrl, apiKey, taskId, externalId)
+    return this.pollForResult(baseUrl, apiKey, taskId, externalId, modelId)
   }
 
   private async createTask(
@@ -253,22 +253,52 @@ export class AgnesVideoGenerator implements VideoGenerator {
       prompt: prompt || 'Generate a video',
     }
 
-    // 图生视频
-    if (imageUrl) {
+    // 图生视频 (单图)
+    if (imageUrl && !options?.keyframeImages) {
       body.image = imageUrl
     }
 
-    // 视频参数
+    // 关键帧动画模式
+    const keyframeImages = options?.keyframeImages as string[] | undefined
+    if (keyframeImages && keyframeImages.length > 0) {
+      body.extra_body = {
+        image: keyframeImages,
+        mode: 'keyframes',
+      }
+      body.mode = 'keyframes'
+    }
+
+    // 生成模式 (ti2vid, keyframes)
+    if (options?.mode && typeof options.mode === 'string') {
+      body.mode = options.mode
+    }
+
+    // negative_prompt (反向提示词)
+    if (options?.negativePrompt && typeof options.negativePrompt === 'string') {
+      body.negative_prompt = options.negativePrompt
+    }
+
+    // seed (随机种子)
+    if (options?.seed && typeof options.seed === 'number') {
+      body.seed = options.seed
+    }
+
+    // num_inference_steps (推理步数)
+    if (options?.inferenceSteps && typeof options.inferenceSteps === 'number') {
+      body.num_inference_steps = options.inferenceSteps
+    }
+
+    // 视频时长参数
+    const fps = (options?.fps as number) || 24
     if (options?.duration) {
-      // 根据时长计算 num_frames (假设 24fps)
-      const fps = 24
+      // 根据时长计算 num_frames
       const frames = Math.ceil((options.duration as number) * fps)
-      // 遵循 8n + 1 规则
+      // 遵循 8n + 1 规则，最大 441
       body.num_frames = Math.min(441, Math.floor((frames - 1) / 8) * 8 + 1)
       body.frame_rate = fps
     } else {
       body.num_frames = 121
-      body.frame_rate = 24
+      body.frame_rate = fps
     }
 
     // 分辨率
@@ -278,6 +308,9 @@ export class AgnesVideoGenerator implements VideoGenerator {
     } else if (options?.resolution === '720p') {
       body.width = 1280
       body.height = 720
+    } else if (options?.resolution === '480p') {
+      body.width = 832
+      body.height = 480
     } else {
       body.width = 1152
       body.height = 768
@@ -288,7 +321,19 @@ export class AgnesVideoGenerator implements VideoGenerator {
       const tmp = body.width as number
       body.width = body.height
       body.height = tmp
+    } else if (options?.aspectRatio === '1:1') {
+      const size = Math.max(body.width as number, body.height as number)
+      body.width = size
+      body.height = size
+    } else if (options?.aspectRatio === '4:3') {
+      body.height = Math.round((body.width as number) * 3 / 4)
+    } else if (options?.aspectRatio === '3:4') {
+      const tmp = body.width as number
+      body.width = Math.round(tmp * 3 / 4)
+      body.height = tmp
     }
+
+    _ulogInfo(`[AgnesVideo] Creating task: model=${modelId}, frames=${body.num_frames}, size=${body.width}x${body.height}`)
 
     try {
       const controller = new AbortController()
@@ -321,6 +366,8 @@ export class AgnesVideoGenerator implements VideoGenerator {
         return { success: false, error: 'Agnes Video API returned no task ID' }
       }
 
+      _ulogInfo(`[AgnesVideo] Task created: ${taskId}, video_id=${data.video_id}`)
+
       return {
         success: true,
         async: true,
@@ -343,13 +390,17 @@ export class AgnesVideoGenerator implements VideoGenerator {
     apiKey: string,
     taskId: string,
     externalId: string,
+    modelId?: string,
   ): Promise<GenerateResult> {
     const startTime = Date.now()
 
     while (Date.now() - startTime < VIDEO_POLL_TIMEOUT_MS) {
       try {
-        // 使用推荐的 video_id 方式查询
-        const endpoint = `${baseUrl}${VIDEO_STATUS_ENDPOINT}?video_id=${taskId}`
+        // 使用推荐的 video_id 方式查询，可选添加 model_name
+        let endpoint = `${baseUrl}${VIDEO_STATUS_ENDPOINT}?video_id=${taskId}`
+        if (modelId) {
+          endpoint += `&model_name=${encodeURIComponent(modelId)}`
+        }
 
         const response = await fetch(endpoint, {
           method: 'GET',
