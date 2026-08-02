@@ -184,6 +184,11 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'viduq1', name: 'Vidu Q1', type: 'video', provider: 'vidu' },
     { modelId: 'viduq1-classic', name: 'Vidu Q1 Classic', type: 'video', provider: 'vidu' },
     { modelId: 'vidu2.0', name: 'Vidu 2.0', type: 'video', provider: 'vidu' },
+
+    // Agnes AI 模型
+    { modelId: 'agnes-2.5-flash', name: 'Agnes 2.5 Flash', type: 'llm', provider: 'agnes' },
+    { modelId: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash', type: 'image', provider: 'agnes' },
+    { modelId: 'agnes-video-v2.0', name: 'Agnes Video V2.0', type: 'video', provider: 'agnes' },
 ]
 
 const PRESET_COMING_SOON_MODEL_KEYS = new Set<string>([])
@@ -205,6 +210,7 @@ export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
     { id: 'minimax', name: 'MiniMax Hailuo', baseUrl: 'https://api.minimaxi.com/v1' },
     { id: 'vidu', name: 'Vidu' },
     { id: 'fal', name: 'FAL' },
+    { id: 'agnes', name: 'Agnes AI', baseUrl: 'https://apihub.agnes-ai.com/v1' },
 ]
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
@@ -213,6 +219,7 @@ const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
     vidu: '生数科技 Vidu',
     bailian: '阿里云百炼',
     siliconflow: '硅基流动',
+    agnes: 'Agnes AI',
 }
 
 function isZhLocale(locale?: string): boolean {
@@ -387,6 +394,15 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
             {
                 text: 'siliconflow_step1',
                 url: 'https://cloud.siliconflow.cn/account/ak'
+            }
+        ]
+    },
+    {
+        providerId: 'agnes',
+        steps: [
+            {
+                text: 'agnes_step1',
+                url: 'https://wiki.agnes-ai.com/llms.txt'
             }
         ]
     },
