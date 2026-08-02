@@ -1,0 +1,410 @@
+/**
+ * Agnes AI 生成器
+ *
+ * 支持：
+ * - Agnes Image 2.0 Flash / 2.1 Flash (文生图、图生图)
+ * - Agnes Video V2.0 (文生视频、图生视频、关键帧动画)
+ *
+ * 文档: https://wiki.agnes-ai.com/llms.txt
+ */
+
+import { logInfo as _ulogInfo, logWarn as _ulogWarn, logError as _ulogError } from '@/lib/logging/core'
+import type {
+  ImageGenerator,
+  ImageGenerateParams,
+  VideoGenerator,
+  VideoGenerateParams,
+  GenerateResult,
+} from './base'
+import { getProviderConfig } from '@/lib/api-config'
+
+// ============================================================
+// 常量
+// ============================================================
+
+const AGNES_BASE_URL = 'https://apihub.agnes-ai.com/v1'
+const IMAGE_ENDPOINT = '/images/generations'
+const VIDEO_ENDPOINT = '/videos'
+const VIDEO_STATUS_ENDPOINT = '/agnesapi'
+
+// 默认超时
+const IMAGE_TIMEOUT_MS = 360_000  // 6 分钟
+const VIDEO_CREATE_TIMEOUT_MS = 60_000  // 1 分钟
+const VIDEO_POLL_TIMEOUT_MS = 600_000  // 10 分钟
+const VIDEO_POLL_INTERVAL_MS = 5_000  // 5 秒
+
+// ============================================================
+// 工具函数
+// ============================================================
+
+function getBaseUrl(userId: string, providerId?: string): Promise<string> {
+  return getProviderConfig(userId, providerId || 'agnes').then(config => {
+    return config?.baseUrl || AGNES_BASE_URL
+  }).catch(() => AGNES_BASE_URL)
+}
+
+function getApiKey(userId: string, providerId?: string): Promise<string> {
+  return getProviderConfig(userId, providerId || 'agnes').then(config => {
+    return config?.apiKey || ''
+  }).catch(() => '')
+}
+
+// ============================================================
+// Agnes Image Generator
+// ============================================================
+
+export class AgnesImageGenerator implements ImageGenerator {
+  async generate(params: ImageGenerateParams): Promise<GenerateResult> {
+    const { userId, prompt, referenceImages, options } = params
+    const modelId = (options?.modelId as string) || 'agnes-image-2.1-flash'
+    const providerId = (options?.provider as string) || 'agnes'
+
+    const [baseUrl, apiKey] = await Promise.all([
+      getBaseUrl(userId, providerId),
+      getApiKey(userId, providerId),
+    ])
+
+    if (!apiKey) {
+      return { success: false, error: 'Agnes API Key not configured' }
+    }
+
+    const endpoint = `${baseUrl}${IMAGE_ENDPOINT}`
+
+    // 构建请求体
+    const body: Record<string, unknown> = {
+      model: modelId,
+      prompt,
+      size: options?.size || '1024x1024',
+    }
+
+    // 宽高比
+    if (options?.aspectRatio) {
+      body.ratio = options.aspectRatio
+    }
+
+    // 图生图
+    if (referenceImages && referenceImages.length > 0) {
+      body.extra_body = {
+        ...((body.extra_body as Record<string, unknown>) || {}),
+        image: referenceImages,
+      }
+    }
+
+    // 输出格式 (默认 URL)
+    const responseFormat = (options?.outputFormat as string) || 'url'
+    if (responseFormat === 'b64_json' || responseFormat === 'base64') {
+      body.return_base64 = true
+    } else {
+      body.extra_body = {
+        ...((body.extra_body as Record<string, unknown>) || {}),
+        response_format: 'url',
+      }
+    }
+
+    _ulogInfo(`[AgnesImage] Generating: model=${modelId}, size=${body.size}`)
+
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS)
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        _ulogError(`[AgnesImage] HTTP ${response.status}: ${errorText}`)
+        return {
+          success: false,
+          error: `Agnes Image API error: ${response.status} ${errorText.slice(0, 200)}`,
+        }
+      }
+
+      const data = await response.json() as {
+        data?: Array<{ url?: string | null; b64_json?: string | null }>
+      }
+
+      if (!data.data || data.data.length === 0) {
+        return { success: false, error: 'Agnes Image API returned empty result' }
+      }
+
+      const result = data.data[0]
+
+      if (result.b64_json) {
+        const base64Data = result.b64_json
+        const dataUri = base64Data.startsWith('data:')
+          ? base64Data
+          : `data:image/png;base64,${base64Data}`
+        _ulogInfo(`[AgnesImage] Success (base64)`)
+        return { success: true, imageBase64: dataUri }
+      }
+
+      if (result.url) {
+        _ulogInfo(`[AgnesImage] Success: ${result.url}`)
+        return { success: true, imageUrl: result.url }
+      }
+
+      return { success: false, error: 'Agnes Image API returned no image data' }
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Agnes Image generation timed out' }
+      }
+      _ulogError(`[AgnesImage] Error: ${error}`)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Agnes Image generation failed',
+      }
+    }
+  }
+}
+
+// ============================================================
+// Agnes Video Generator
+// ============================================================
+
+interface AgnesVideoTaskResponse {
+  id?: string
+  task_id?: string
+  video_id?: string
+  object?: string
+  model?: string
+  status?: string
+  progress?: number
+  created_at?: number
+  seconds?: string
+  size?: string
+}
+
+interface AgnesVideoStatusResponse {
+  id?: string
+  video_id?: string
+  task_id?: string
+  object?: string
+  model?: string
+  status?: string
+  progress?: number
+  created_at?: number
+  completed_at?: number
+  seconds?: string
+  size?: string
+  metadata?: {
+    url?: string
+    size_mapping?: Record<string, unknown>
+  }
+  error?: { message?: string } | null
+}
+
+export class AgnesVideoGenerator implements VideoGenerator {
+  async generate(params: VideoGenerateParams): Promise<GenerateResult> {
+    const { userId, imageUrl, prompt, options } = params
+    const modelId = (options?.modelId as string) || 'agnes-video-v2.0'
+    const providerId = (options?.provider as string) || 'agnes'
+
+    const [baseUrl, apiKey] = await Promise.all([
+      getBaseUrl(userId, providerId),
+      getApiKey(userId, providerId),
+    ])
+
+    if (!apiKey) {
+      return { success: false, error: 'Agnes API Key not configured' }
+    }
+
+    // 1. 创建视频任务
+    const createResult = await this.createTask(baseUrl, apiKey, modelId, imageUrl, prompt, options)
+    if (!createResult.success) {
+      return createResult
+    }
+
+    const taskId = createResult.requestId!
+    const externalId = createResult.externalId!
+
+    _ulogInfo(`[AgnesVideo] Task created: ${taskId}`)
+
+    // 2. 轮询等待结果
+    return this.pollForResult(baseUrl, apiKey, taskId, externalId)
+  }
+
+  private async createTask(
+    baseUrl: string,
+    apiKey: string,
+    modelId: string,
+    imageUrl?: string,
+    prompt?: string,
+    options?: Record<string, unknown>,
+  ): Promise<GenerateResult> {
+    const endpoint = `${baseUrl}${VIDEO_ENDPOINT}`
+
+    const body: Record<string, unknown> = {
+      model: modelId,
+      prompt: prompt || 'Generate a video',
+    }
+
+    // 图生视频
+    if (imageUrl) {
+      body.image = imageUrl
+    }
+
+    // 视频参数
+    if (options?.duration) {
+      // 根据时长计算 num_frames (假设 24fps)
+      const fps = 24
+      const frames = Math.ceil((options.duration as number) * fps)
+      // 遵循 8n + 1 规则
+      body.num_frames = Math.min(441, Math.floor((frames - 1) / 8) * 8 + 1)
+      body.frame_rate = fps
+    } else {
+      body.num_frames = 121
+      body.frame_rate = 24
+    }
+
+    // 分辨率
+    if (options?.resolution === '1080p') {
+      body.width = 1920
+      body.height = 1080
+    } else if (options?.resolution === '720p') {
+      body.width = 1280
+      body.height = 720
+    } else {
+      body.width = 1152
+      body.height = 768
+    }
+
+    // 宽高比调整
+    if (options?.aspectRatio === '9:16') {
+      const tmp = body.width as number
+      body.width = body.height
+      body.height = tmp
+    }
+
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), VIDEO_CREATE_TIMEOUT_MS)
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        return {
+          success: false,
+          error: `Agnes Video create error: ${response.status} ${errorText.slice(0, 200)}`,
+        }
+      }
+
+      const data = await response.json() as AgnesVideoTaskResponse
+      const taskId = data.video_id || data.task_id || data.id
+
+      if (!taskId) {
+        return { success: false, error: 'Agnes Video API returned no task ID' }
+      }
+
+      return {
+        success: true,
+        async: true,
+        requestId: taskId,
+        externalId: `AGNES:VIDEO:${taskId}`,
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Agnes Video create request timed out' }
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Agnes Video create failed',
+      }
+    }
+  }
+
+  private async pollForResult(
+    baseUrl: string,
+    apiKey: string,
+    taskId: string,
+    externalId: string,
+  ): Promise<GenerateResult> {
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < VIDEO_POLL_TIMEOUT_MS) {
+      try {
+        // 使用推荐的 video_id 方式查询
+        const endpoint = `${baseUrl}${VIDEO_STATUS_ENDPOINT}?video_id=${taskId}`
+
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+        })
+
+        if (!response.ok) {
+          _ulogWarn(`[AgnesVideo] Poll HTTP ${response.status}`)
+          await this.sleep(VIDEO_POLL_INTERVAL_MS)
+          continue
+        }
+
+        const data = await response.json() as AgnesVideoStatusResponse
+
+        if (data.status === 'completed') {
+          const videoUrl = data.metadata?.url
+          if (!videoUrl) {
+            return {
+              success: false,
+              error: 'Agnes Video completed but no URL in response',
+              externalId,
+            }
+          }
+
+          _ulogInfo(`[AgnesVideo] Completed: ${videoUrl}`)
+          return {
+            success: true,
+            videoUrl,
+            externalId,
+          }
+        }
+
+        if (data.status === 'failed') {
+          const errorMsg = data.error?.message || 'Unknown error'
+          return {
+            success: false,
+            error: `Agnes Video failed: ${errorMsg}`,
+            externalId,
+          }
+        }
+
+        _ulogInfo(`[AgnesVideo] Status: ${data.status}, Progress: ${data.progress || 0}%`)
+      } catch (error: unknown) {
+        _ulogWarn(`[AgnesVideo] Poll error: ${error}`)
+      }
+
+      await this.sleep(VIDEO_POLL_INTERVAL_MS)
+    }
+
+    return {
+      success: false,
+      error: 'Agnes Video generation timed out',
+      externalId,
+      requestId: taskId,
+      async: true,
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+}

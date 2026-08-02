@@ -20,6 +20,7 @@ import { GoogleVeoVideoGenerator } from './video/google'
 import { OpenAICompatibleVideoGenerator } from './video'
 import { MinimaxVideoGenerator } from './minimax'
 import { ViduVideoGenerator } from './vidu'
+import { AgnesImageGenerator, AgnesVideoGenerator } from './agnes'
 import { getProviderKey } from '@/lib/api-config'
 import {
     BailianAudioGenerator,
@@ -64,7 +65,7 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
         case 'openai-compatible':
             return new OpenAICompatibleImageGenerator(actualModelId, provider)
         case 'agnes':
-            return new OpenAICompatibleImageGenerator(actualModelId, provider)
+            return new AgnesImageGenerator()
         case 'bailian':
             return new BailianImageGenerator()
         case 'siliconflow':
@@ -95,7 +96,7 @@ export function createVideoGenerator(provider: string): VideoGenerator {
         case 'openai-compatible':
             return new OpenAICompatibleVideoGenerator(provider)
         case 'agnes':
-            return new OpenAICompatibleVideoGenerator(provider)
+            return new AgnesVideoGenerator()
         case 'bailian':
             return new BailianVideoGenerator()
         case 'siliconflow':
