@@ -22,6 +22,7 @@ import { MinimaxVideoGenerator } from './minimax'
 import { ViduVideoGenerator } from './vidu'
 import { AgnesImageGenerator, AgnesVideoGenerator } from './agnes'
 import { StepFunImageGenerator, StepFunAudioGenerator } from './stepfun'
+import { MimoAudioGenerator } from './audio'
 import { getProviderKey } from '@/lib/api-config'
 import {
     BailianAudioGenerator,
@@ -121,6 +122,8 @@ export function createAudioGenerator(provider: string): AudioGenerator {
             return new SiliconFlowAudioGenerator()
         case 'stepfun':
             return new StepFunAudioGenerator()
+        case 'mimo':
+            return new MimoAudioGenerator()
         default:
             throw new Error(`Unknown audio generator provider: ${provider}`)
     }

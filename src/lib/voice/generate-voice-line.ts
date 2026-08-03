@@ -263,7 +263,7 @@ export async function generateVoiceLine(params: {
       audioDuration: result.audioDuration ?? getWavDurationFromBuffer(audioData),
     }
   } else if (providerKey === 'mimo') {
-    const { apiKey } = await getProviderConfig(params.userId, audioSelection.provider)
+    const mimoConfig = await getProviderConfig(params.userId, audioSelection.provider)
     // MiMo 音色绑定：voiceId 为预置音色名或 base64 样本；无则用默认音色
     const voiceId = voiceBinding?.provider === 'mimo' ? voiceBinding.voiceId : undefined
     const result = await synthesizeWithMimoTTS({
@@ -271,7 +271,8 @@ export async function generateVoiceLine(params: {
       voiceId,
       modelId: audioSelection.modelId,
       styleInstruction: line.emotionPrompt || undefined,
-      apiKey,
+      apiKey: mimoConfig.apiKey,
+      baseUrl: mimoConfig.baseUrl,
     })
     if (!result.success || !result.audioData) {
       throw new Error(`MiMo TTS 失败: ${result.error || '未知错误'}`)

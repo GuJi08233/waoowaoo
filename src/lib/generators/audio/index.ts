@@ -3,3 +3,4 @@
  */
 
 export { BailianTTSGenerator } from './bailian'
+export { MimoAudioGenerator } from './mimo'

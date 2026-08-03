@@ -386,7 +386,7 @@ export function useProviderCardState({
     (presetProvider) => presetProvider.id === provider.id,
   )
   const showBaseUrlEdit =
-    ['gemini-compatible', 'openai-compatible', 'agnes'].includes(providerKey) &&
+    ['gemini-compatible', 'openai-compatible', 'agnes', 'stepfun', 'mimo'].includes(providerKey) &&
     Boolean(onUpdateBaseUrl)
   const tutorial = getProviderTutorial(provider.id)
 
