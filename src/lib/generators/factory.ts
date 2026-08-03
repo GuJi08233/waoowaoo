@@ -21,6 +21,7 @@ import { OpenAICompatibleVideoGenerator } from './video'
 import { MinimaxVideoGenerator } from './minimax'
 import { ViduVideoGenerator } from './vidu'
 import { AgnesImageGenerator, AgnesVideoGenerator } from './agnes'
+import { StepFunImageGenerator, StepFunAudioGenerator } from './stepfun'
 import { getProviderKey } from '@/lib/api-config'
 import {
     BailianAudioGenerator,
@@ -66,6 +67,8 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
             return new OpenAICompatibleImageGenerator(actualModelId, provider)
         case 'agnes':
             return new AgnesImageGenerator()
+        case 'stepfun':
+            return new StepFunImageGenerator()
         case 'bailian':
             return new BailianImageGenerator()
         case 'siliconflow':
@@ -116,6 +119,8 @@ export function createAudioGenerator(provider: string): AudioGenerator {
             return new BailianAudioGenerator()
         case 'siliconflow':
             return new SiliconFlowAudioGenerator()
+        case 'stepfun':
+            return new StepFunAudioGenerator()
         default:
             throw new Error(`Unknown audio generator provider: ${provider}`)
     }

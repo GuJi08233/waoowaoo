@@ -36,6 +36,7 @@ import {
 } from './runtime-shared'
 import { completeBailianLlm } from '@/lib/providers/bailian'
 import { completeSiliconFlowLlm } from '@/lib/providers/siliconflow'
+import { completeOpenAICompatibleChat } from './openai-compatible-chat'
 
 const OFFICIAL_ONLY_PROVIDER_KEYS = new Set(['bailian', 'siliconflow'])
 
@@ -244,6 +245,42 @@ export async function chatCompletion(
 
       if (providerKey === 'bailian') {
         const completion = await completeBailianLlm({
+          modelId: resolvedModelId,
+          messages,
+          apiKey: providerConfig.apiKey,
+          baseUrl: providerConfig.baseUrl,
+          temperature,
+        })
+        const completionParts = getCompletionParts(completion)
+        logLlmRawOutput({
+          userId,
+          projectId,
+          provider: providerKey,
+          modelId: resolvedModelId,
+          modelKey: selection.modelKey,
+          stream: false,
+          action: options.action,
+          text: completionParts.text,
+          reasoning: completionParts.reasoning,
+          usage: completionUsageSummary(completion),
+        })
+        recordCompletionUsage(resolvedModelId, completion)
+        llmLogger.info({
+          action: 'llm.call.success',
+          message: 'llm call succeeded',
+          provider: providerKey,
+          durationMs: Date.now() - attemptStartedAt,
+          details: {
+            model: resolvedModelId,
+            attempt,
+            maxRetries,
+          },
+        })
+        return completion
+      }
+
+      if (providerKey === 'agnes' || providerKey === 'stepfun') {
+        const completion = await completeOpenAICompatibleChat({
           modelId: resolvedModelId,
           messages,
           apiKey: providerConfig.apiKey,

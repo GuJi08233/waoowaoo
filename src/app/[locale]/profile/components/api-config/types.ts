@@ -190,6 +190,14 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash', type: 'image', provider: 'agnes' },
     { modelId: 'agnes-image-2.0-flash', name: 'Agnes Image 2.0 Flash', type: 'image', provider: 'agnes' },
     { modelId: 'agnes-video-v2.0', name: 'Agnes Video V2.0', type: 'video', provider: 'agnes' },
+
+    // StepFun (阶跃星辰) 模型
+    { modelId: 'step-3.7-flash', name: 'Step 3.7 Flash', type: 'llm', provider: 'stepfun' },
+    { modelId: 'step-3.5-flash-2603', name: 'Step 3.5 Flash 2603', type: 'llm', provider: 'stepfun' },
+    { modelId: 'step-3.5-flash', name: 'Step 3.5 Flash', type: 'llm', provider: 'stepfun' },
+    { modelId: 'step-router-v1', name: 'Step Router V1', type: 'llm', provider: 'stepfun' },
+    { modelId: 'step-image-edit-2', name: 'Step Image Edit 2', type: 'image', provider: 'stepfun' },
+    { modelId: 'stepaudio-2.5-tts', name: 'StepAudio 2.5 TTS', type: 'audio', provider: 'stepfun' },
 ]
 
 const PRESET_COMING_SOON_MODEL_KEYS = new Set<string>([])
@@ -212,6 +220,7 @@ export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
     { id: 'vidu', name: 'Vidu' },
     { id: 'fal', name: 'FAL' },
     { id: 'agnes', name: 'Agnes AI', baseUrl: 'https://apihub.agnes-ai.com/v1' },
+    { id: 'stepfun', name: 'StepFun', baseUrl: 'https://api.stepfun.com/step_plan/v1' },
 ]
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
@@ -221,6 +230,7 @@ const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
     bailian: '阿里云百炼',
     siliconflow: '硅基流动',
     agnes: 'Agnes AI',
+    stepfun: '阶跃星辰 StepFun',
 }
 
 function isZhLocale(locale?: string): boolean {
@@ -404,6 +414,15 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
             {
                 text: 'agnes_step1',
                 url: 'https://wiki.agnes-ai.com/llms.txt'
+            }
+        ]
+    },
+    {
+        providerId: 'stepfun',
+        steps: [
+            {
+                text: 'stepfun_step1',
+                url: 'https://platform.stepfun.com/interface-key'
             }
         ]
     },

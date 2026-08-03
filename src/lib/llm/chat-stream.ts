@@ -39,6 +39,10 @@ import { withStreamChunkTimeout } from './stream-timeout'
 import { shouldUseOpenAIReasoningProviderOptions } from './reasoning-capability'
 import { completeBailianLlm } from '@/lib/providers/bailian'
 import { completeSiliconFlowLlm } from '@/lib/providers/siliconflow'
+import { completeOpenAICompatibleChat } from './openai-compatible-chat'
+
+// OpenAI 兼容协议的官方提供商（Agnes / StepFun），LLM 走 chat/completions
+const OPENAI_COMPAT_OFFICIAL_PROVIDERS = new Set(['agnes', 'stepfun'])
 
 const OFFICIAL_ONLY_PROVIDER_KEYS = new Set(['bailian', 'siliconflow'])
 
@@ -167,6 +171,52 @@ export async function chatCompletionStream(
       })
       recordCompletionUsage(resolvedModelId, completion)
       emitStreamStage(callbacks, streamStep, 'completed', compatEngine)
+      callbacks?.onComplete?.(completionParts.text, streamStep)
+      return completion
+    }
+
+    if (providerKey === 'agnes' || providerKey === 'stepfun') {
+      emitStreamStage(callbacks, streamStep, 'streaming', providerKey)
+      const completion = await completeOpenAICompatibleChat({
+        modelId: resolvedModelId,
+        messages,
+        apiKey: providerConfig.apiKey,
+        baseUrl: providerConfig.baseUrl,
+        temperature: options.temperature ?? 0.7,
+      })
+      const completionParts = getCompletionParts(completion)
+      let seq = 1
+      if (completionParts.reasoning) {
+        emitStreamChunk(callbacks, streamStep, {
+          kind: 'reasoning',
+          delta: completionParts.reasoning,
+          seq,
+          lane: 'reasoning',
+        })
+        seq += 1
+      }
+      if (completionParts.text) {
+        emitStreamChunk(callbacks, streamStep, {
+          kind: 'text',
+          delta: completionParts.text,
+          seq,
+          lane: 'main',
+        })
+      }
+      logLlmRawOutput({
+        userId,
+        projectId,
+        provider: providerKey,
+        modelId: resolvedModelId,
+        modelKey: selection.modelKey,
+        stream: true,
+        action: options.action,
+        text: completionParts.text,
+        reasoning: completionParts.reasoning,
+        usage: completionUsageSummary(completion),
+      })
+      recordCompletionUsage(resolvedModelId, completion)
+      emitStreamStage(callbacks, streamStep, 'completed', providerKey)
       callbacks?.onComplete?.(completionParts.text, streamStep)
       return completion
     }
