@@ -10,6 +10,18 @@ interface ProviderBaseFieldsProps {
   state: UseProviderCardStateResult
 }
 
+// Agnes AI 区域配置
+const AGNES_REGIONS = [
+  { id: 'global', name: 'Agnes AI (Global)', baseUrl: 'https://apihub.agnes-ai.com/v1' },
+  { id: 'cn', name: 'Agnes AI (China)', baseUrl: 'https://apihub.agnes-ai.cn/v1' },
+]
+
+function resolveAgnesRegion(baseUrl?: string): string {
+  if (!baseUrl) return 'global'
+  if (baseUrl.includes('agnes-ai.cn')) return 'cn'
+  return 'global'
+}
+
 export function ProviderBaseFields({ provider, t, state }: ProviderBaseFieldsProps) {
   const baseUrlPlaceholder = (() => {
     switch (state.providerKey) {
@@ -224,7 +236,32 @@ export function ProviderBaseFields({ provider, t, state }: ProviderBaseFieldsPro
             <span className="w-[64px] shrink-0 whitespace-nowrap text-[12px] font-semibold text-[var(--glass-text-tertiary)]">
               {t('baseUrl')}
             </span>
-            {state.isEditingUrl ? (
+
+            {/* Agnes AI 区域下拉选择 */}
+            {state.providerKey === 'agnes' ? (
+              <div className="flex flex-1 items-center gap-2">
+                <select
+                  value={resolveAgnesRegion(provider.baseUrl)}
+                  onChange={(event) => {
+                    const region = AGNES_REGIONS.find((item) => item.id === event.target.value)
+                    if (region) {
+                      state.setTempUrl(region.baseUrl)
+                      state.handleSaveUrl()
+                    }
+                  }}
+                  className="glass-input-base flex-1 cursor-pointer px-3 py-1.5 text-[12px] font-mono"
+                >
+                  {AGNES_REGIONS.map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {region.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--glass-text-tertiary)]">
+                  {provider.baseUrl}
+                </span>
+              </div>
+            ) : state.isEditingUrl ? (
               <div className="flex flex-1 items-center gap-2">
                 <input
                   type="text"
