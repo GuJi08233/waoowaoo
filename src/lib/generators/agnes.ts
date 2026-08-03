@@ -457,6 +457,8 @@ export class AgnesVideoGenerator implements VideoGenerator {
     // completed 状态但未拿到 URL 的连续次数（URL 可能延迟返回，最多重试 N 次）
     let completedWithoutUrlCount = 0
     const COMPLETED_WITHOUT_URL_MAX = 6  // 约 30 秒
+    // 保存最近一次响应摘要，用于失败时返回给前端诊断
+    let lastResponseSummary = ''
 
     while (Date.now() - startTime < VIDEO_POLL_TIMEOUT_MS) {
       try {
@@ -486,13 +488,24 @@ export class AgnesVideoGenerator implements VideoGenerator {
             if (!videoUrl) {
               // 两种方式均无 URL：不立即失败，继续轮询重试（URL 可能延迟返回）
               completedWithoutUrlCount++
+              lastResponseSummary = JSON.stringify({
+                task_id: data.task_id,
+                video_id: data.video_id,
+                model: data.model,
+                status: data.status,
+                progress: data.progress,
+                seconds: data.seconds,
+                size: data.size,
+                completed_at: data.completed_at,
+                metadata: data.metadata,
+              }).slice(0, 800)
               _ulogWarn(
                 `[AgnesVideo] Completed without URL (attempt ${completedWithoutUrlCount}/${COMPLETED_WITHOUT_URL_MAX}), raw: ${JSON.stringify(data).slice(0, 300)}`,
               )
               if (completedWithoutUrlCount >= COMPLETED_WITHOUT_URL_MAX) {
                 return {
                   success: false,
-                  error: 'Agnes Video completed but no URL in response',
+                  error: `Agnes Video completed but no URL in response (task ${taskId}, tried ${COMPLETED_WITHOUT_URL_MAX} times via both endpoints). Last response: ${lastResponseSummary}`,
                   externalId,
                 }
               }
@@ -510,9 +523,16 @@ export class AgnesVideoGenerator implements VideoGenerator {
 
           if (data.status === 'failed') {
             const errorMsg = data.error?.message || 'Unknown error'
+            lastResponseSummary = JSON.stringify({
+              task_id: data.task_id,
+              video_id: data.video_id,
+              model: data.model,
+              status: data.status,
+              error: data.error,
+            }).slice(0, 500)
             return {
               success: false,
-              error: `Agnes Video failed: ${errorMsg}`,
+              error: `Agnes Video failed: ${errorMsg} (task ${taskId}). Response: ${lastResponseSummary}`,
               externalId,
             }
           }
@@ -534,9 +554,17 @@ export class AgnesVideoGenerator implements VideoGenerator {
                 }
               }
             } else if (legacyData.status === 'failed') {
+              const errorMsg = legacyData.error?.message || 'Unknown error'
+              lastResponseSummary = JSON.stringify({
+                task_id: legacyData.task_id,
+                video_id: legacyData.video_id,
+                model: legacyData.model,
+                status: legacyData.status,
+                error: legacyData.error,
+              }).slice(0, 500)
               return {
                 success: false,
-                error: `Agnes Video failed: ${legacyData.error?.message || 'Unknown error'}`,
+                error: `Agnes Video failed: ${errorMsg} (task ${taskId}). Response: ${lastResponseSummary}`,
                 externalId,
               }
             } else {
@@ -553,7 +581,7 @@ export class AgnesVideoGenerator implements VideoGenerator {
 
     return {
       success: false,
-      error: 'Agnes Video generation timed out',
+      error: `Agnes Video generation timed out after ${VIDEO_POLL_TIMEOUT_MS / 60000}min (task ${taskId}). Last response: ${lastResponseSummary || 'none'}`,
       externalId,
       requestId: taskId,
       async: true,
