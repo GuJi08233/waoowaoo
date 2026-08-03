@@ -198,6 +198,11 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'step-router-v1', name: 'Step Router V1', type: 'llm', provider: 'stepfun' },
     { modelId: 'step-image-edit-2', name: 'Step Image Edit 2', type: 'image', provider: 'stepfun' },
     { modelId: 'stepaudio-2.5-tts', name: 'StepAudio 2.5 TTS', type: 'audio', provider: 'stepfun' },
+
+    // MiMo (小米) TTS 模型
+    { modelId: 'mimo-v2.5-tts', name: 'MiMo V2.5 TTS', type: 'audio', provider: 'mimo' },
+    { modelId: 'mimo-v2.5-tts-voicedesign', name: 'MiMo V2.5 Voice Design', type: 'audio', provider: 'mimo' },
+    { modelId: 'mimo-v2.5-tts-voiceclone', name: 'MiMo V2.5 Voice Clone', type: 'audio', provider: 'mimo' },
 ]
 
 const PRESET_COMING_SOON_MODEL_KEYS = new Set<string>([])
@@ -221,6 +226,7 @@ export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
     { id: 'fal', name: 'FAL' },
     { id: 'agnes', name: 'Agnes AI', baseUrl: 'https://apihub.agnes-ai.com/v1' },
     { id: 'stepfun', name: 'StepFun', baseUrl: 'https://api.stepfun.com/step_plan/v1' },
+    { id: 'mimo', name: 'MiMo (Xiaomi)', baseUrl: 'https://api.xiaomimimo.com/v1' },
 ]
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
@@ -231,6 +237,7 @@ const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
     siliconflow: '硅基流动',
     agnes: 'Agnes AI',
     stepfun: '阶跃星辰 StepFun',
+    mimo: '小米 MiMo',
 }
 
 function isZhLocale(locale?: string): boolean {
@@ -423,6 +430,15 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
             {
                 text: 'stepfun_step1',
                 url: 'https://platform.stepfun.com/interface-key'
+            }
+        ]
+    },
+    {
+        providerId: 'mimo',
+        steps: [
+            {
+                text: 'mimo_step1',
+                url: 'https://platform.xiaomimimo.com'
             }
         ]
     },

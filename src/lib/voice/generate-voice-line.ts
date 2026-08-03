@@ -6,6 +6,7 @@ import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { extractStorageKey, getSignedUrl, toFetchableUrl, uploadObject } from '@/lib/storage'
 import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { synthesizeWithBailianTTS } from '@/lib/providers/bailian'
+import { synthesizeWithMimoTTS } from '@/lib/providers/mimo/tts'
 import {
   parseSpeakerVoiceMap,
   resolveVoiceBindingForProvider,
@@ -254,6 +255,26 @@ export async function generateVoiceLine(params: {
     }, apiKey)
     if (!result.success || !result.audioData) {
       throw new Error(normalizeBailianVoiceGenerationError(result.error))
+    }
+
+    const audioData = result.audioData
+    generated = {
+      audioData,
+      audioDuration: result.audioDuration ?? getWavDurationFromBuffer(audioData),
+    }
+  } else if (providerKey === 'mimo') {
+    const { apiKey } = await getProviderConfig(params.userId, audioSelection.provider)
+    // MiMo 音色绑定：voiceId 为预置音色名或 base64 样本；无则用默认音色
+    const voiceId = voiceBinding?.provider === 'mimo' ? voiceBinding.voiceId : undefined
+    const result = await synthesizeWithMimoTTS({
+      text,
+      voiceId,
+      modelId: audioSelection.modelId,
+      styleInstruction: line.emotionPrompt || undefined,
+      apiKey,
+    })
+    if (!result.success || !result.audioData) {
+      throw new Error(`MiMo TTS 失败: ${result.error || '未知错误'}`)
     }
 
     const audioData = result.audioData

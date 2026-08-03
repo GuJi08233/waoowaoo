@@ -179,7 +179,8 @@
       "bailian_step1": "进入阿里云百炼平台，获取 API Key",
       "siliconflow_step1": "进入硅基流动控制台，创建 API Key",
       "agnes_step1": "进入 Agnes AI 平台，创建 API Key（国际站：apihub.agnes-ai.com，中国站：apihub.agnes-ai.cn）",
-      "stepfun_step1": "进入阶跃星辰平台，订阅 Step Plan 套餐并获取 API Key"
+      "stepfun_step1": "进入阶跃星辰平台，订阅 Step Plan 套餐并获取 API Key",
+      "mimo_step1": "进入小米 MiMo 平台，获取 API Key"
     }
   },
   "assistantOpen": "AI配置助手",

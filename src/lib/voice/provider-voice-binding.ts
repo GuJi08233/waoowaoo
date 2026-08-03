@@ -1,6 +1,6 @@
 type VoiceSource = 'character' | 'speaker'
 
-export type SupportedAudioProviderKey = 'fal' | 'bailian'
+export type SupportedAudioProviderKey = 'fal' | 'bailian' | 'mimo'
 
 export interface CharacterVoiceFields {
   customVoiceUrl?: string | null
@@ -28,7 +28,14 @@ export type BailianSpeakerVoiceEntry = {
   previewAudioUrl?: string
 }
 
-export type SpeakerVoiceEntry = FalSpeakerVoiceEntry | BailianSpeakerVoiceEntry
+export type MimoSpeakerVoiceEntry = {
+  provider: 'mimo'
+  voiceType: string
+  voiceId?: string   // 预置音色 ID（如 冰糖/Mia）或 base64 样本（voiceclone）
+  previewAudioUrl?: string
+}
+
+export type SpeakerVoiceEntry = FalSpeakerVoiceEntry | BailianSpeakerVoiceEntry | MimoSpeakerVoiceEntry
 export type SpeakerVoiceMap = Record<string, SpeakerVoiceEntry>
 
 export type FalVoiceGenerationBinding = {
@@ -43,7 +50,13 @@ export type BailianVoiceGenerationBinding = {
   voiceId: string
 }
 
-export type VoiceGenerationBinding = FalVoiceGenerationBinding | BailianVoiceGenerationBinding
+export type MimoVoiceGenerationBinding = {
+  provider: 'mimo'
+  source: VoiceSource
+  voiceId?: string   // 预置音色 ID 或 base64 样本（voiceclone）；无则用默认音色
+}
+
+export type VoiceGenerationBinding = FalVoiceGenerationBinding | BailianVoiceGenerationBinding | MimoVoiceGenerationBinding
 
 export type SpeakerVoicePatch =
   | {
@@ -55,6 +68,12 @@ export type SpeakerVoicePatch =
     provider: 'bailian'
     voiceType?: string
     voiceId: string
+    previewAudioUrl?: string
+  }
+  | {
+    provider: 'mimo'
+    voiceType?: string
+    voiceId?: string
     previewAudioUrl?: string
   }
 
@@ -96,6 +115,16 @@ function normalizeRawSpeakerVoiceEntry(raw: unknown, speaker: string): SpeakerVo
       provider: 'bailian',
       voiceType,
       voiceId,
+      ...(preview ? { previewAudioUrl: preview } : {}),
+    }
+  }
+
+  if (provider === 'mimo') {
+    const preview = previewAudioUrl || audioUrl
+    return {
+      provider: 'mimo',
+      voiceType,
+      ...(voiceId ? { voiceId } : {}),
       ...(preview ? { previewAudioUrl: preview } : {}),
     }
   }
@@ -151,7 +180,7 @@ export function parseSpeakerVoiceMap(raw: string | null | undefined): SpeakerVoi
 }
 
 function normalizeProviderKey(providerKey: string): SupportedAudioProviderKey | null {
-  if (providerKey === 'fal' || providerKey === 'bailian') {
+  if (providerKey === 'fal' || providerKey === 'bailian' || providerKey === 'mimo') {
     return providerKey
   }
   return null
@@ -175,6 +204,14 @@ function toBailianBinding(source: VoiceSource, voiceId: string | null): BailianV
   }
 }
 
+function toMimoBinding(source: VoiceSource, voiceId: string | null): MimoVoiceGenerationBinding | null {
+  return {
+    provider: 'mimo',
+    source,
+    ...(voiceId ? { voiceId } : {}),
+  }
+}
+
 export function resolveVoiceBindingForProvider(params: {
   providerKey: string
   character?: CharacterVoiceFields | null
@@ -191,6 +228,15 @@ export function resolveVoiceBindingForProvider(params: {
     if (fromCharacter) return fromCharacter
     if (params.speakerVoice?.provider !== 'fal') return null
     return toFalBinding('speaker', readTrimmedString(params.speakerVoice.audioUrl))
+  }
+
+  if (providerKey === 'mimo') {
+    // MiMo：voiceId 可选（无则使用默认预置音色）
+    const fromCharacter = toMimoBinding('character', characterVoiceId)
+    if (params.speakerVoice?.provider === 'mimo') {
+      return toMimoBinding('speaker', readTrimmedString(params.speakerVoice.voiceId))
+    }
+    return fromCharacter
   }
 
   const fromCharacter = toBailianBinding('character', characterVoiceId)
@@ -218,6 +264,10 @@ export function hasAnyVoiceBinding(params: {
   if (!params.speakerVoice) return false
   if (params.speakerVoice.provider === 'fal') {
     return !!readTrimmedString(params.speakerVoice.audioUrl)
+  }
+  if (params.speakerVoice.provider === 'mimo') {
+    // MiMo 无 voiceId 时使用默认预置音色，也算有绑定
+    return true
   }
   return !!readTrimmedString(params.speakerVoice.voiceId)
 }
