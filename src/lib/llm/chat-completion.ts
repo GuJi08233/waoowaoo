@@ -280,11 +280,14 @@ export async function chatCompletion(
       }
 
       if (providerKey === 'agnes' || providerKey === 'stepfun') {
+        const defaultBaseUrl = providerKey === 'agnes'
+          ? 'https://apihub.agnes-ai.com/v1'
+          : 'https://api.stepfun.com/step_plan/v1'
         const completion = await completeOpenAICompatibleChat({
           modelId: resolvedModelId,
           messages,
           apiKey: providerConfig.apiKey,
-          baseUrl: providerConfig.baseUrl,
+          baseUrl: providerConfig.baseUrl || defaultBaseUrl,
           temperature,
         })
         const completionParts = getCompletionParts(completion)

@@ -41,9 +41,6 @@ import { completeBailianLlm } from '@/lib/providers/bailian'
 import { completeSiliconFlowLlm } from '@/lib/providers/siliconflow'
 import { completeOpenAICompatibleChat } from './openai-compatible-chat'
 
-// OpenAI 兼容协议的官方提供商（Agnes / StepFun），LLM 走 chat/completions
-const OPENAI_COMPAT_OFFICIAL_PROVIDERS = new Set(['agnes', 'stepfun'])
-
 const OFFICIAL_ONLY_PROVIDER_KEYS = new Set(['bailian', 'siliconflow'])
 
 type GoogleModelClient = {
@@ -177,11 +174,14 @@ export async function chatCompletionStream(
 
     if (providerKey === 'agnes' || providerKey === 'stepfun') {
       emitStreamStage(callbacks, streamStep, 'streaming', providerKey)
+      const defaultBaseUrl = providerKey === 'agnes'
+        ? 'https://apihub.agnes-ai.com/v1'
+        : 'https://api.stepfun.com/step_plan/v1'
       const completion = await completeOpenAICompatibleChat({
         modelId: resolvedModelId,
         messages,
         apiKey: providerConfig.apiKey,
-        baseUrl: providerConfig.baseUrl,
+        baseUrl: providerConfig.baseUrl || defaultBaseUrl,
         temperature: options.temperature ?? 0.7,
       })
       const completionParts = getCompletionParts(completion)
