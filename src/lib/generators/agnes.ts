@@ -205,7 +205,49 @@ interface AgnesVideoStatusResponse {
     url?: string
     size_mapping?: Record<string, unknown>
   }
+  // 兼容其他可能的 URL 字段位置
+  url?: string | null
+  video_url?: string | null
+  result?: { url?: string }
+  data?: { url?: string } | { url?: string }[]
+  output?: { url?: string }
   error?: { message?: string } | null
+}
+
+/**
+ * 从各种可能的响应结构中提取视频 URL
+ */
+function extractVideoUrl(data: AgnesVideoStatusResponse): string | undefined {
+  // 文档格式：metadata.url
+  if (typeof data.metadata?.url === 'string' && data.metadata.url.trim()) {
+    return data.metadata.url.trim()
+  }
+  // 顶层 url
+  if (typeof data.url === 'string' && data.url.trim()) {
+    return data.url.trim()
+  }
+  // 顶层 video_url
+  if (typeof data.video_url === 'string' && data.video_url.trim()) {
+    return data.video_url.trim()
+  }
+  // result.url
+  if (typeof data.result?.url === 'string' && data.result.url.trim()) {
+    return data.result.url.trim()
+  }
+  // output.url
+  if (typeof data.output?.url === 'string' && data.output.url.trim()) {
+    return data.output.url.trim()
+  }
+  // data.url (对象或数组)
+  if (data.data) {
+    if (Array.isArray(data.data) && typeof data.data[0]?.url === 'string') {
+      return data.data[0].url.trim()
+    }
+    if (!Array.isArray(data.data) && typeof data.data.url === 'string') {
+      return data.data.url.trim()
+    }
+  }
+  return undefined
 }
 
 export class AgnesVideoGenerator implements VideoGenerator {
@@ -418,8 +460,10 @@ export class AgnesVideoGenerator implements VideoGenerator {
         const data = await response.json() as AgnesVideoStatusResponse
 
         if (data.status === 'completed') {
-          const videoUrl = data.metadata?.url
+          const videoUrl = extractVideoUrl(data)
           if (!videoUrl) {
+            // 记录完整响应便于调试
+            _ulogWarn(`[AgnesVideo] Completed but no URL found, raw response: ${JSON.stringify(data).slice(0, 500)}`)
             return {
               success: false,
               error: 'Agnes Video completed but no URL in response',
