@@ -61,6 +61,16 @@ export const GET = apiHandler(async (
       continue
     }
 
+    if (voice.provider === 'mimo') {
+      speakerVoices[speaker] = {
+        provider: 'mimo',
+        voiceType: voice.voiceType,
+        ...(voice.voiceId ? { voiceId: voice.voiceId } : {}),
+        ...(voice.previewAudioUrl ? { previewAudioUrl: signUrlIfNeeded(voice.previewAudioUrl) } : {}),
+      }
+      continue
+    }
+
     const previewAudioUrl = voice.previewAudioUrl ? signUrlIfNeeded(voice.previewAudioUrl) : undefined
     speakerVoices[speaker] = {
       provider: 'bailian',
@@ -92,7 +102,7 @@ export const PATCH = apiHandler(async (
   const speaker = readTrimmedString(body?.speaker) ?? ''
   const voiceType = readTrimmedString(body?.voiceType) ?? 'uploaded'
   const providerRaw = readTrimmedString(body?.provider)?.toLowerCase() ?? null
-  if (!providerRaw || (providerRaw !== 'fal' && providerRaw !== 'bailian')) {
+  if (!providerRaw || (providerRaw !== 'fal' && providerRaw !== 'bailian' && providerRaw !== 'mimo')) {
     throw new ApiError('INVALID_PARAMS')
   }
   const provider = providerRaw
@@ -140,6 +150,21 @@ export const PATCH = apiHandler(async (
       provider: 'fal',
       voiceType,
       audioUrl: audioUrlToStore,
+    }
+  } else if (provider === 'mimo') {
+    const previewCandidate = previewAudioUrl || audioUrl
+    const resolvedPreviewKey = previewCandidate
+      ? await resolveStorageKeyFromMediaValue(previewCandidate)
+      : null
+    const previewAudioUrlToStore = previewCandidate
+      ? (resolvedPreviewKey || previewCandidate)
+      : undefined
+
+    nextVoiceEntry = {
+      provider: 'mimo',
+      voiceType,
+      ...(voiceId ? { voiceId } : {}),
+      ...(previewAudioUrlToStore ? { previewAudioUrl: previewAudioUrlToStore } : {}),
     }
   } else {
     const previewCandidate = previewAudioUrl || audioUrl
