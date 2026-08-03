@@ -200,11 +200,16 @@ export class StepFunAudioGenerator implements AudioGenerator {
       body.voice = voice
     }
 
-    // 语速（项目格式如 "+50%"）
-    if (rate && typeof rate === 'string') {
-      const match = rate.match(/([+-]?\d+(?:\.\d+)?)%/)
-      if (match) {
-        body.speed_ratio = 1 + Number.parseFloat(match[1]) / 100
+    // 语速：支持 number（1.0 = 正常）或字符串（"+50%"）
+    const rateValue = rate as number | string | undefined
+    if (rateValue !== undefined && rateValue !== null) {
+      if (typeof rateValue === 'string') {
+        const match = rateValue.match(/([+-]?\d+(?:\.\d+)?)%/)
+        if (match) {
+          body.speed_ratio = 1 + Number.parseFloat(match[1]) / 100
+        }
+      } else {
+        body.speed_ratio = rateValue
       }
     }
 
