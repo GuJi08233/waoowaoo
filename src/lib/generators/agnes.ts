@@ -34,6 +34,11 @@ const VIDEO_CREATE_TIMEOUT_MS = 60_000  // 1 分钟
 const VIDEO_POLL_TIMEOUT_MS = 600_000  // 10 分钟
 const VIDEO_POLL_INTERVAL_MS = 5_000  // 5 秒
 
+// Agnes Image 支持的宽高比（文档）
+const AGNES_IMAGE_RATIOS = new Set([
+  '1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9',
+])
+
 // ============================================================
 // 工具函数
 // ============================================================
@@ -77,14 +82,16 @@ export class AgnesImageGenerator implements ImageGenerator {
     const endpoint = `${baseUrl}${IMAGE_ENDPOINT}`
 
     // 构建请求体
+    // size: 文档推荐档位式 (1K/2K/3K/4K)，也兼容精确尺寸写法
+    // 未指定 size 时默认 1K 档位，配合 ratio 使用
     const body: Record<string, unknown> = {
       model: modelId,
       prompt,
-      size: options?.size || '1024x1024',
+      size: options?.size || '1K',
     }
 
-    // 宽高比
-    if (options?.aspectRatio) {
+    // 宽高比（校验支持的取值）
+    if (options?.aspectRatio && AGNES_IMAGE_RATIOS.has(options.aspectRatio)) {
       body.ratio = options.aspectRatio
     }
 
@@ -334,11 +341,13 @@ export class AgnesVideoGenerator implements VideoGenerator {
     }
 
     // 视频时长参数
-    const fps = (options?.fps as number) || 24
+    // frame_rate 支持范围 1-60（文档规定）
+    const rawFps = (options?.fps as number) || 24
+    const fps = Math.min(60, Math.max(1, Math.round(rawFps)))
     if (options?.duration) {
       // 根据时长计算 num_frames
       const frames = Math.ceil((options.duration as number) * fps)
-      // 遵循 8n + 1 规则，最大 441
+      // 遵循 8n + 1 规则，最大 441（文档规定）
       body.num_frames = Math.min(441, Math.floor((frames - 1) / 8) * 8 + 1)
       body.frame_rate = fps
     } else {
@@ -445,6 +454,9 @@ export class AgnesVideoGenerator implements VideoGenerator {
     // 首选 video_id，fallback 用 task_id
     const primaryId = videoId || taskId
     const fallbackId = taskIdFallback || taskId
+    // completed 状态但未拿到 URL 的连续次数（URL 可能延迟返回，最多重试 N 次）
+    let completedWithoutUrlCount = 0
+    const COMPLETED_WITHOUT_URL_MAX = 6  // 约 30 秒
 
     while (Date.now() - startTime < VIDEO_POLL_TIMEOUT_MS) {
       try {
@@ -472,12 +484,20 @@ export class AgnesVideoGenerator implements VideoGenerator {
               videoUrl = await this.queryLegacyEndpoint(baseUrl, apiKey, fallbackId)
             }
             if (!videoUrl) {
-              _ulogWarn(`[AgnesVideo] Completed but no URL found, raw response: ${JSON.stringify(data).slice(0, 500)}`)
-              return {
-                success: false,
-                error: 'Agnes Video completed but no URL in response',
-                externalId,
+              // 两种方式均无 URL：不立即失败，继续轮询重试（URL 可能延迟返回）
+              completedWithoutUrlCount++
+              _ulogWarn(
+                `[AgnesVideo] Completed without URL (attempt ${completedWithoutUrlCount}/${COMPLETED_WITHOUT_URL_MAX}), raw: ${JSON.stringify(data).slice(0, 300)}`,
+              )
+              if (completedWithoutUrlCount >= COMPLETED_WITHOUT_URL_MAX) {
+                return {
+                  success: false,
+                  error: 'Agnes Video completed but no URL in response',
+                  externalId,
+                }
               }
+              await this.sleep(VIDEO_POLL_INTERVAL_MS)
+              continue
             }
 
             _ulogInfo(`[AgnesVideo] Completed: ${videoUrl}`)
