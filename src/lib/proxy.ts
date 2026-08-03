@@ -93,7 +93,10 @@ export function enableProxyIfConfigured(): boolean {
 
   // 包装全局 fetch：NO_PROXY 匹配的请求直连，其余走代理
   const originalFetch = globalThis.fetch
-  const patchedFetch: typeof fetch = (input, init) => {
+  const patchedFetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     let url: string
     try {
       url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
@@ -104,10 +107,10 @@ export function enableProxyIfConfigured(): boolean {
       return originalFetch(input, init)
     }
     return undiciFetch(input, { ...init, dispatcher: agent })
-  }
+  }) as typeof fetch
 
   try {
-    globalThis.fetch = patchedFetch as typeof fetch
+    globalThis.fetch = patchedFetch
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     _ulogWarn(`[Proxy] Failed to patch fetch (${message}), continuing without proxy`)
