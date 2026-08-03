@@ -9,6 +9,9 @@ export async function register() {
 
   // 只在 Node.js 服务端运行
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { enableProxyIfConfigured } = await import('@/lib/proxy')
+    enableProxyIfConfigured()
+
     const { prisma } = await import('@/lib/prisma')
     const { logInfo: _ulogInfo, logError: _ulogError } = await import('@/lib/logging/core')
 

@@ -1,9 +1,12 @@
 import 'dotenv/config'
+import { enableProxyIfConfigured } from '@/lib/proxy'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 import { createImageWorker } from './image.worker'
 import { createVideoWorker } from './video.worker'
 import { createVoiceWorker } from './voice.worker'
 import { createTextWorker } from './text.worker'
+
+enableProxyIfConfigured()
 
 const workers = [createImageWorker(), createVideoWorker(), createVoiceWorker(), createTextWorker()]
 
