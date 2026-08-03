@@ -273,11 +273,14 @@ export class AgnesVideoGenerator implements VideoGenerator {
 
     const taskId = createResult.requestId!
     const externalId = createResult.externalId!
+    // 同时记录 video_id 和 task_id（文档说明两者可能不同）
+    const videoId = createResult.videoId
+    const taskIdFallback = createResult.taskIdFallback
 
-    _ulogInfo(`[AgnesVideo] Task created: ${taskId}`)
+    _ulogInfo(`[AgnesVideo] Task created: ${taskId}, video_id=${videoId || 'N/A'}, task_id=${taskIdFallback || 'N/A'}`)
 
     // 2. 轮询等待结果
-    return this.pollForResult(baseUrl, apiKey, taskId, externalId, modelId)
+    return this.pollForResult(baseUrl, apiKey, taskId, externalId, modelId, videoId, taskIdFallback)
   }
 
   private async createTask(
@@ -287,7 +290,7 @@ export class AgnesVideoGenerator implements VideoGenerator {
     imageUrl?: string,
     prompt?: string,
     options?: Record<string, unknown>,
-  ): Promise<GenerateResult> {
+  ): Promise<GenerateResult & { videoId?: string; taskIdFallback?: string }> {
     const endpoint = `${baseUrl}${VIDEO_ENDPOINT}`
 
     const body: Record<string, unknown> = {
@@ -403,18 +406,20 @@ export class AgnesVideoGenerator implements VideoGenerator {
 
       const data = await response.json() as AgnesVideoTaskResponse
       const taskId = data.video_id || data.task_id || data.id
+      const taskIdFallback = data.task_id || data.id
 
       if (!taskId) {
         return { success: false, error: 'Agnes Video API returned no task ID' }
       }
-
-      _ulogInfo(`[AgnesVideo] Task created: ${taskId}, video_id=${data.video_id}`)
 
       return {
         success: true,
         async: true,
         requestId: taskId,
         externalId: `AGNES:VIDEO:${taskId}`,
+        // 附加字段：用于轮询 fallback
+        videoId: data.video_id || taskId,
+        taskIdFallback: taskIdFallback || taskId,
       }
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -433,13 +438,18 @@ export class AgnesVideoGenerator implements VideoGenerator {
     taskId: string,
     externalId: string,
     modelId?: string,
+    videoId?: string,
+    taskIdFallback?: string,
   ): Promise<GenerateResult> {
     const startTime = Date.now()
+    // 首选 video_id，fallback 用 task_id
+    const primaryId = videoId || taskId
+    const fallbackId = taskIdFallback || taskId
 
     while (Date.now() - startTime < VIDEO_POLL_TIMEOUT_MS) {
       try {
-        // 使用推荐的 video_id 方式查询，可选添加 model_name
-        let endpoint = `${baseUrl}${VIDEO_STATUS_ENDPOINT}?video_id=${taskId}`
+        // 方式 1（推荐）：GET /agnesapi?video_id=<VIDEO_ID>
+        let endpoint = `${baseUrl}${VIDEO_STATUS_ENDPOINT}?video_id=${primaryId}`
         if (modelId) {
           endpoint += `&model_name=${encodeURIComponent(modelId)}`
         }
@@ -451,44 +461,69 @@ export class AgnesVideoGenerator implements VideoGenerator {
           },
         })
 
-        if (!response.ok) {
-          _ulogWarn(`[AgnesVideo] Poll HTTP ${response.status}`)
-          await this.sleep(VIDEO_POLL_INTERVAL_MS)
-          continue
-        }
+        if (response.ok) {
+          const data = await response.json() as AgnesVideoStatusResponse
 
-        const data = await response.json() as AgnesVideoStatusResponse
+          if (data.status === 'completed') {
+            let videoUrl = extractVideoUrl(data)
+            if (!videoUrl) {
+              // 方式 1 完成但无 URL：尝试旧版查询方式 2：GET /v1/videos/<TASK_ID>
+              _ulogWarn(`[AgnesVideo] Method 1 completed without URL, trying legacy endpoint`)
+              videoUrl = await this.queryLegacyEndpoint(baseUrl, apiKey, fallbackId)
+            }
+            if (!videoUrl) {
+              _ulogWarn(`[AgnesVideo] Completed but no URL found, raw response: ${JSON.stringify(data).slice(0, 500)}`)
+              return {
+                success: false,
+                error: 'Agnes Video completed but no URL in response',
+                externalId,
+              }
+            }
 
-        if (data.status === 'completed') {
-          const videoUrl = extractVideoUrl(data)
-          if (!videoUrl) {
-            // 记录完整响应便于调试
-            _ulogWarn(`[AgnesVideo] Completed but no URL found, raw response: ${JSON.stringify(data).slice(0, 500)}`)
+            _ulogInfo(`[AgnesVideo] Completed: ${videoUrl}`)
             return {
-              success: false,
-              error: 'Agnes Video completed but no URL in response',
+              success: true,
+              videoUrl,
               externalId,
             }
           }
 
-          _ulogInfo(`[AgnesVideo] Completed: ${videoUrl}`)
-          return {
-            success: true,
-            videoUrl,
-            externalId,
+          if (data.status === 'failed') {
+            const errorMsg = data.error?.message || 'Unknown error'
+            return {
+              success: false,
+              error: `Agnes Video failed: ${errorMsg}`,
+              externalId,
+            }
+          }
+
+          _ulogInfo(`[AgnesVideo] Status: ${data.status}, Progress: ${data.progress || 0}%`)
+        } else {
+          _ulogWarn(`[AgnesVideo] Poll HTTP ${response.status}, trying legacy endpoint`)
+          // 方式 1 失败：尝试旧版查询方式 2
+          const legacyData = await this.queryLegacyEndpointData(baseUrl, apiKey, fallbackId)
+          if (legacyData) {
+            if (legacyData.status === 'completed') {
+              const videoUrl = extractVideoUrl(legacyData)
+              if (videoUrl) {
+                _ulogInfo(`[AgnesVideo] Completed (legacy): ${videoUrl}`)
+                return {
+                  success: true,
+                  videoUrl,
+                  externalId,
+                }
+              }
+            } else if (legacyData.status === 'failed') {
+              return {
+                success: false,
+                error: `Agnes Video failed: ${legacyData.error?.message || 'Unknown error'}`,
+                externalId,
+              }
+            } else {
+              _ulogInfo(`[AgnesVideo] Legacy status: ${legacyData.status}`)
+            }
           }
         }
-
-        if (data.status === 'failed') {
-          const errorMsg = data.error?.message || 'Unknown error'
-          return {
-            success: false,
-            error: `Agnes Video failed: ${errorMsg}`,
-            externalId,
-          }
-        }
-
-        _ulogInfo(`[AgnesVideo] Status: ${data.status}, Progress: ${data.progress || 0}%`)
       } catch (error: unknown) {
         _ulogWarn(`[AgnesVideo] Poll error: ${error}`)
       }
@@ -502,6 +537,45 @@ export class AgnesVideoGenerator implements VideoGenerator {
       externalId,
       requestId: taskId,
       async: true,
+    }
+  }
+
+  /**
+   * 旧版查询方式：GET /v1/videos/<TASK_ID>
+   * 返回视频 URL，未完成或无 URL 时返回 undefined
+   */
+  private async queryLegacyEndpoint(
+    baseUrl: string,
+    apiKey: string,
+    taskId: string,
+  ): Promise<string | undefined> {
+    const data = await this.queryLegacyEndpointData(baseUrl, apiKey, taskId)
+    if (!data) return undefined
+    return extractVideoUrl(data)
+  }
+
+  /**
+   * 旧版查询方式：GET /v1/videos/<TASK_ID>
+   * 返回完整响应数据
+   */
+  private async queryLegacyEndpointData(
+    baseUrl: string,
+    apiKey: string,
+    taskId: string,
+  ): Promise<AgnesVideoStatusResponse | null> {
+    try {
+      const endpoint = `${baseUrl}/videos/${encodeURIComponent(taskId)}`
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      })
+      if (!response.ok) return null
+      return await response.json() as AgnesVideoStatusResponse
+    } catch (error) {
+      _ulogWarn(`[AgnesVideo] Legacy query error: ${error}`)
+      return null
     }
   }
 
