@@ -106,7 +106,8 @@ export function enableProxyIfConfigured(): boolean {
     if (shouldBypassProxy(url, noProxyList)) {
       return originalFetch(input, init)
     }
-    return undiciFetch(input, { ...init, dispatcher: agent })
+    // undici 的 Response 类型与全局 Response 不完全一致，需要类型转换
+    return undiciFetch(input, { ...init, dispatcher: agent }) as unknown as Response
   }) as typeof fetch
 
   try {
