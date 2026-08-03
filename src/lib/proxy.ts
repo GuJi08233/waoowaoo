@@ -106,10 +106,13 @@ export function enableProxyIfConfigured(): boolean {
     if (shouldBypassProxy(url, noProxyList)) {
       return originalFetch(input, init)
     }
-    // undici fetch 的 input 类型为 RequestInfo，需将 URL 转为 string
-    const fetchInput: RequestInfo = input instanceof URL ? input.toString() : input
-    // undici 的 Response 类型与全局 Response 不完全一致，需要类型转换
-    return undiciFetch(fetchInput, { ...init, dispatcher: agent }) as unknown as Response
+    // undici 的 RequestInfo/RequestInit 类型与 DOM 全局类型不完全兼容，
+    // 使用类型断言绕过，运行时行为一致
+    const undiciFetchTyped = undiciFetch as unknown as (
+      input: RequestInfo | URL,
+      init?: RequestInit & { dispatcher?: unknown },
+    ) => Promise<Response>
+    return undiciFetchTyped(input, { ...init, dispatcher: agent })
   }) as typeof fetch
 
   try {
